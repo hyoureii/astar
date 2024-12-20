@@ -224,7 +224,7 @@ export const findPath = (
     return null;
 };
 
-export default function grid() {
+export default function Grid() {
     const [grid, setGrid] = useState<number[][]>([]);
     const [start, setStart] = useState<[number, number] | null>(null);
     const [end, setEnd] = useState<[number, number] | null>(null);
@@ -258,16 +258,6 @@ export default function grid() {
         }
     };
 
-    const initializeGrid = (width: number, height: number): number[][] => {
-        return Array(height)
-            .fill(1)
-            .map(() =>
-                Array(width)
-                    .fill(1)
-                    .map(() => (Math.random() < ratio / 100 ? 0 : 1))
-            );
-    };
-
     const isPoint = (
         point: [number, number] | null,
         i: number,
@@ -277,6 +267,16 @@ export default function grid() {
     };
 
     useEffect(() => {
+        const initializeGrid = (width: number, height: number): number[][] => {
+            return Array(height)
+                .fill(1)
+                .map(() =>
+                    Array(width)
+                        .fill(1)
+                        .map(() => (Math.random() < ratio / 100 ? 0 : 1))
+                );
+        };
+
         setGrid(initializeGrid(width, height));
         setStart(null);
         setEnd(null);

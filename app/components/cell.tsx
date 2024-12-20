@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function cell({
+export default function Cell({
     value,
     position,
     onClick,
