@@ -5,6 +5,14 @@ import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import Cell from "@/app/components/cell";
 
+interface GridProps {
+    onPathFound?: (info: {
+        success: boolean;
+        executionTime: number;
+        type: "Iterative" | "Recursive";
+    }) => void;
+}
+
 type Node = {
     f: number;
     g: number;
@@ -57,15 +65,16 @@ const reconstructPath = (endNode: Node): Position[] => {
     return path;
 };
 
-export const findIterative = (
+export const findIterative = async (
     grid: number[][],
     start: Position,
-    end: Position
-): Position[] | null => {
+    end: Position,
+    setVisited: (pos: Position) => void,
+    delay: number
+): Promise<Position[] | null> => {
     const openSet: Node[] = [];
     const closedSet = new Set<string>();
 
-    // Create the start node
     const startNode: Node = {
         position: start,
         g: 0,
@@ -77,7 +86,6 @@ export const findIterative = (
     openSet.push(startNode);
 
     while (openSet.length > 0) {
-        // Find the node with the lowest f score
         const currentIndex = openSet.reduce(
             (lowest, node, index) =>
                 node.f < openSet[lowest].f ? index : lowest,
@@ -85,22 +93,20 @@ export const findIterative = (
         );
         const current = openSet[currentIndex];
 
-        // If we've reached the end, reconstruct and return the path
         if (current.position[0] === end[0] && current.position[1] === end[1]) {
             return reconstructPath(current);
         }
 
-        // Remove current from openSet and add to closedSet
         openSet.splice(currentIndex, 1);
         closedSet.add(`${current.position[0]},${current.position[1]}`);
+        setVisited(current.position);
+        await new Promise((resolve) => setTimeout(resolve, delay));
 
-        // Check all neighbors
         const neighbors = getNeighbors(current.position, grid, closedSet);
 
         for (const neighbor of neighbors) {
-            const gScore = current.g + 1; // Cost to move to neighbor
+            const gScore = current.g + 1;
 
-            // Create neighbor node
             const neighborNode: Node = {
                 position: neighbor,
                 g: gScore,
@@ -109,7 +115,6 @@ export const findIterative = (
                 parent: current,
             };
 
-            // Check if this is a better path
             const existingOpenNode = openSet.find(
                 (node) =>
                     node.position[0] === neighbor[0] &&
@@ -118,7 +123,6 @@ export const findIterative = (
 
             if (existingOpenNode) {
                 if (gScore < existingOpenNode.g) {
-                    // Update existing node
                     existingOpenNode.g = gScore;
                     existingOpenNode.f = gScore + existingOpenNode.h;
                     existingOpenNode.parent = current;
@@ -129,38 +133,36 @@ export const findIterative = (
         }
     }
 
-    // No path found
     return null;
 };
 
-const aStarRecursive = (
+const aStarRecursive = async (
     grid: number[][],
     openSet: Node[],
     closedSet: Set<string>,
-    end: Position
-): Node | null => {
-    // Base case: if openSet is empty, no path exists
+    end: Position,
+    setVisited: (pos: Position) => void,
+    delay: number
+): Promise<Node | null> => {
     if (openSet.length === 0) {
         return null;
     }
 
-    // Find the node with lowest f score
     const currentIndex = openSet.reduce(
         (lowest, node, index) => (node.f < openSet[lowest].f ? index : lowest),
         0
     );
     const current = openSet[currentIndex];
 
-    // If we've reached the end, return the current node
     if (current.position[0] === end[0] && current.position[1] === end[1]) {
         return current;
     }
 
-    // Remove current from openSet and add to closedSet
     openSet.splice(currentIndex, 1);
     closedSet.add(`${current.position[0]},${current.position[1]}`);
+    setVisited(current.position);
+    await new Promise((resolve) => setTimeout(resolve, delay));
 
-    // Get and process neighbors
     const neighbors = getNeighbors(current.position, grid, closedSet);
 
     for (const neighbor of neighbors) {
@@ -191,19 +193,19 @@ const aStarRecursive = (
         }
     }
 
-    // Recursive call with updated openSet and closedSet
-    return aStarRecursive(grid, openSet, closedSet, end);
+    return aStarRecursive(grid, openSet, closedSet, end, setVisited, delay);
 };
 
-export const findPath = (
+export const findPath = async (
     grid: number[][],
     start: Position,
-    end: Position
-): Position[] | null => {
+    end: Position,
+    setVisited: (pos: Position) => void,
+    delay: number
+): Promise<Position[] | null> => {
     const openSet: Node[] = [];
     const closedSet = new Set<string>();
 
-    // Create the start node
     const startNode: Node = {
         position: start,
         g: 0,
@@ -214,8 +216,14 @@ export const findPath = (
 
     openSet.push(startNode);
 
-    // Start the recursive search
-    const finalNode = aStarRecursive(grid, openSet, closedSet, end);
+    const finalNode = await aStarRecursive(
+        grid,
+        openSet,
+        closedSet,
+        end,
+        setVisited,
+        delay
+    );
 
     if (finalNode) {
         return reconstructPath(finalNode);
@@ -224,7 +232,7 @@ export const findPath = (
     return null;
 };
 
-export default function Grid() {
+export default function Grid({ onPathFound }: GridProps) {
     const [grid, setGrid] = useState<number[][]>([]);
     const [start, setStart] = useState<[number, number] | null>(null);
     const [end, setEnd] = useState<[number, number] | null>(null);
@@ -232,30 +240,79 @@ export default function Grid() {
     const [height, setHeight] = useState<number>(20);
     const [ratio, setRatio] = useState<number>(70);
     const [path, setPath] = useState<Position[]>([]);
+    const [visited, setVisited] = useState<Set<string>>(new Set());
+    const [isLoading, setIsLoading] = useState<boolean>(false);
 
-    const handleFindIterative = () => {
-        if (!start || !end) return;
+    const delay = 20;
 
-        const foundPath = findIterative(grid, start, end);
-        if (foundPath) {
-            setPath(foundPath);
-        } else {
-            // Handle no path found
-            setPath([]);
-            alert("No valid path found!");
-        }
+    const addVisited = (pos: Position) => {
+        setVisited((prev) => new Set(prev).add(`${pos[0]},${pos[1]}`));
     };
 
-    const handleFindRecursive = () => {
+    const handleFindIterative = async () => {
         if (!start || !end) return;
+        setVisited(new Set());
+        setPath([]);
+        setIsLoading(true);
 
-        const foundPath = findPath(grid, start, end);
+        const startTime = performance.now();
+
+        const foundPath = await findIterative(
+            grid,
+            start,
+            end,
+            addVisited,
+            delay
+        );
+        const endTime = performance.now();
+        const runningTime = endTime - startTime;
+
         if (foundPath) {
             setPath(foundPath);
+            onPathFound?.({
+                success: true,
+                executionTime: runningTime,
+                type: "Iterative",
+            });
         } else {
             setPath([]);
-            alert("No valid path found!");
+            onPathFound?.({
+                success: false,
+                executionTime: runningTime,
+                type: "Iterative",
+            });
         }
+        setIsLoading(false);
+    };
+
+    const handleFindRecursive = async () => {
+        if (!start || !end) return;
+        setVisited(new Set());
+        setPath([]);
+        setIsLoading(true);
+
+        const startTime = performance.now();
+
+        const foundPath = await findPath(grid, start, end, addVisited, delay);
+        const endTime = performance.now();
+        const runningTime = endTime - startTime;
+
+        if (foundPath) {
+            setPath(foundPath);
+            onPathFound?.({
+                success: true,
+                executionTime: runningTime,
+                type: "Recursive",
+            });
+        } else {
+            setPath([]);
+            onPathFound?.({
+                success: false,
+                executionTime: runningTime,
+                type: "Recursive",
+            });
+        }
+        setIsLoading(false);
     };
 
     const isPoint = (
@@ -266,24 +323,27 @@ export default function Grid() {
         return point !== null && point[0] === i && point[1] === j;
     };
 
-    useEffect(() => {
-        const initializeGrid = (width: number, height: number): number[][] => {
-            return Array(height)
-                .fill(1)
-                .map(() =>
-                    Array(width)
-                        .fill(1)
-                        .map(() => (Math.random() < ratio / 100 ? 0 : 1))
-                );
-        };
+    const initializeGrid = (width: number, height: number): number[][] => {
+        return Array(height)
+            .fill(1)
+            .map(() =>
+                Array(width)
+                    .fill(1)
+                    .map(() => (Math.random() < ratio / 100 ? 0 : 1))
+            );
+    };
 
+    const generateGrid = () => {
         setGrid(initializeGrid(width, height));
         setStart(null);
         setEnd(null);
         setPath([]);
-    }, [width, height, ratio]);
+        setVisited(new Set());
+    };
 
-    useEffect(() => {}, [start, end]);
+    useEffect(() => {
+        generateGrid();
+    }, [width, height, ratio]);
 
     const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = parseInt(e.target.value);
@@ -315,9 +375,13 @@ export default function Grid() {
             setEnd(null);
         }
         setPath([]);
+        setVisited(new Set());
     };
     const isInPath = (i: number, j: number): boolean => {
         return path.some(([row, col]) => row === i && col === j);
+    };
+    const isVisited = (i: number, j: number): boolean => {
+        return visited.has(`${i},${j}`);
     };
 
     return (
@@ -374,7 +438,7 @@ export default function Grid() {
                 <div className="flex justify-center">
                     <Button
                         onClick={handleFindIterative}
-                        disabled={!start || !end}
+                        disabled={!start || !end || isLoading}
                         className="px-4 py-2"
                     >
                         Iterative
@@ -383,10 +447,19 @@ export default function Grid() {
                 <div className="flex justify-center">
                     <Button
                         onClick={handleFindRecursive}
-                        disabled={!start || !end}
+                        disabled={!start || !end || isLoading}
                         className="px-4 py-2"
                     >
                         Recursive
+                    </Button>
+                </div>
+                <div className="flex justify-center">
+                    <Button
+                        onClick={generateGrid}
+                        className="px-4 py-2"
+                        disabled={isLoading}
+                    >
+                        Regenerate Grid
                     </Button>
                 </div>
             </div>
@@ -404,6 +477,7 @@ export default function Grid() {
                                     isStart={isPoint(start, i, j)}
                                     isEnd={isPoint(end, i, j)}
                                     isPath={isInPath(i, j)}
+                                    isVisited={isVisited(i, j)}
                                 />
                             ))}
                         </div>

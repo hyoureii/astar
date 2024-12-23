@@ -7,6 +7,7 @@ export default function Cell({
     isStart,
     isEnd,
     isPath,
+    isVisited,
 }: {
     value: number;
     position: [number, number];
@@ -14,6 +15,7 @@ export default function Cell({
     isStart: boolean;
     isEnd: boolean;
     isPath: boolean;
+    isVisited: boolean;
 }) {
     const getCellColor = () => {
         if (isStart) {
@@ -24,6 +26,9 @@ export default function Cell({
         }
         if (isPath) {
             return "bg-blue-500";
+        }
+        if (isVisited) {
+            return "bg-yellow-200";
         }
         return value === 0 ? "bg-gray-300" : "bg-primary";
     };
