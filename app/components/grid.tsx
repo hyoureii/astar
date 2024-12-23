@@ -243,7 +243,7 @@ export default function Grid({ onPathFound }: GridProps) {
     const [visited, setVisited] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
-    const delay = 20;
+    const delay = 10;
 
     const addVisited = (pos: Position) => {
         setVisited((prev) => new Set(prev).add(`${pos[0]},${pos[1]}`));
