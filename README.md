@@ -8,4 +8,4 @@ as the course has ended, i deleted the project from vercel and thus, the live ve
 
 ---
 
-_UPDATE: the project is now deprecated_
+_UPDATE: the project is now abandoned_
